@@ -455,6 +455,8 @@ tail(dt.wi)
 ```{r}
 describe(dt.wi)
 ```
+
+#PCA Analysis
 ```{r}
 dt.wi.sc <- scale(dt.wi[3:10])
 describe(dt.wi.sc)
@@ -507,11 +509,11 @@ percent.malignant
 ```{r}
 
 split = sample.split(dt.wi$diagnosis, SplitRatio = 0.7)
-Train = subset(dt.wi, split==TRUE)
-Test = subset(dt.wi, split==FALSE)
+Train2 = subset(dt.wi, split==TRUE)
+Test2 = subset(dt.wi, split==FALSE)
 
-# Building a Logistic Regression Model
-dt.wi.log = glm(diagnosis~., data = dt.wi, family = binomial, na.action = na.pass)
+# Building a Logistic Regression Model with ALL the variables
+dt.wi.log = glm(diagnosis~., data = Train2, family = binomial, na.action = na.pass)
 summary(dt.wi.log)
 
 head(dt.wi)
@@ -530,6 +532,127 @@ Issue with model, going to dig into what is happening by using a tree
 There is one fairly common circumstance in which both convergence problems and the Hauck-Donner phenomenon can occur. This is when the fitted probabilities are extremely close to zero or one. Consider a medical diagnosis problem with thousands of cases and around 50 binary explanatory variable (which may arise from coding fewer categorical variables); one of these indicators is rarely true but always indicates that the disease is present. Then the fitted probabilities of cases with that indicator should be one, which can only be achieved by taking βi = ∞. The result from glm will be warnings and an estimated coefficient of around +/- 10. There has been fairly extensive discussion of this in the statistical literature, usually claiming non-existence of maximum likelihood estimates; see Sautner and Duffy (1989, p. 234).
 
 Read more about this error here:https://stackoverflow.com/questions/8596160/why-am-i-getting-algorithm-did-not-converge-and-fitted-prob-numerically-0-or
+
+
+# Building a logistic regression model with only the Mean variables
+
+
+```{r}
+#Logistic Regression
+Train2 = Train2[,1:12]
+Test2 = Test2[,1:12]
+
+LogModel = glm(diagnosis ~ radius_mean+texture_mean+perimeter_mean + area_mean + smoothness_mean + compactness_mean+ concavity_mean+ concave.points_mean + symmetry_mean + fractal_dimension_mean, data = Train2, family=binomial)
+summary(LogModel)
+
+#Note: Only texture, area, smoothness, and concave points are significant
+  
+#Prediction
+PredictTest2 = predict(LogModel, newdata = Test2, type = "response")
+
+#Confusion Matrix
+cm2 = table(Test2$diagnosis, round(PredictTest2))
+row.names(cm2) = c("Benign", "Malignant")
+colnames(cm2) = c("Predicted: B", "Predictoin: M")
+cm2
+
+Accuracy = (102+57)/(102+57+7+5)
+Accuracy
+
+#Baseline Accuracy
+counttb = Test2 %>% 
+  filter(diagnosis == "M") %>% 
+  summarise(count = n())
+counttb
+
+1-counttb[1,]/nrow(Test2)
+
+#AUC
+TestPredLM <- data.frame(Probability = predict(LogModel, Test2, type = c("response")),
+                       Prediction = round(predict(LogModel, Test2, type = c("response")), digits = 0),
+                       ActualDiagnosis = Test2$diagnosis)
+
+auc.LM1 = roc(TestPredLM$ActualDiagnosis, TestPredLM$Prediction)
+auc(auc.LM1)
+
+#NOTE: AUC is 88% which is really good!
+
+```
+
+Using this model, only the texture, area, and smoothness have significance. It's accuracy is 93 %, which is about 30% greater than the baseline and its area underneath the curve is about 92%. 
+
+
+
+# CART MODEL
+
+```{r}
+# CART
+BCTree2 = rpart(diagnosis ~ radius_mean+texture_mean+perimeter_mean + area_mean + smoothness_mean + compactness_mean+ concavity_mean+ concave.points_mean + symmetry_mean + fractal_dimension_mean, method="class", data=Train2, minbucket=5)
+prp(BCTree2)
+
+# Evaluating the Model
+BCPredict2 = predict(BCTree2, newdata=Test2, type="class") # automatically assumes threshold = 0.5 and directly predicts 0 or 1
+table(Test2$diagnosis, BCPredict2)
+
+#Accuracy
+(105+55)/(9+2+105+55)
+
+```
+
+The CART model is more accurate than the logistic regression model, but only by 1%. 
+
+# XGBoost Model
+
+```{r}
+Train2 = Train2 %>% 
+  mutate(diagnosis = recode(diagnosis,
+                            "M" = 1,
+                            "B" = 0))
+Test2 = Test2 %>% 
+  mutate(diagnosis = recode(diagnosis,
+                            "M" = 1,
+                            "B" = 0))
+colsx = c(3,4,5,6,7,9,10,11,12)
+xgb = xgboost(data = data.matrix(Train2[colsx]), 
+               label = Train2$diagnosis, 
+               eta = 0.1,
+               max_depth = 4, 
+               nround=100, 
+               subsample = 1,
+               colsample_bytree = 1,
+               num_class = 1,
+               min_child_weight = 5,
+               gamma = 5,
+               nthread = 30,
+               eval_metric = "logloss",
+               objective = "binary:logistic",
+               verbose = 0
+)
+
+Test2$XGB = predict(xgb, data.matrix(Test2[colsx]))
+Test2$XGB_Predict = round(Test2$XGB)
+
+# Evaluating the Model
+
+XGB_Accuracy = subset(Test2, Test$diagnosis - Test2$XGB_Predict == 0)
+
+nrow(XGB_Accuracy)
+nrow(Test)
+
+auc.xgb = roc(Test2$diagnosis, Test2$XGB)
+AUC = auc(auc.xgb)
+AUC
+
+```
+
+The area under the curve using the XGB model is 98%, which is the highest of the three. 
+
+
+
+
+
+
+
 
 
 
