@@ -534,7 +534,7 @@ There is one fairly common circumstance in which both convergence problems and t
 Read more about this error here:https://stackoverflow.com/questions/8596160/why-am-i-getting-algorithm-did-not-converge-and-fitted-prob-numerically-0-or
 
 
-# Building a logistic regression model with only the Mean variables
+# Building a logistic regression model with only the Mean Variables
 
 
 ```{r}
