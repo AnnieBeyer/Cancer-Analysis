@@ -58,12 +58,12 @@ multiplot <- function(..., plotlist=NULL, file, cols=1, layout=NULL) {
 
 ```
 
-# Introduction
+# FIRST DATA SET: Introduction
 
-This introduction was paraphrased from the Breast Cancer Surveillance Consortium overview of the dataset. The purpose of analysis of this dataset is to determine casual factors related with breast cancer and practice applying statistical methodology. The following analysis concerns a dataset of 280,660 mammograms from women in the Breast Cancer Surveillance Consortium. All women did not have a previous diagnosis of breast cancer and did not have any imaging in the previous nine months preceding the mammogram. Cancer registry and pathology data wwere linked to the mammography data.
+This introduction was paraphrased from the Breast Cancer Surveillance Consortium overview of the dataset. The purpose of analysis of this dataset is to determine casual factors that predict malignant breast cancer cells and practice applying statistical methodology. The following analysis concerns a dataset of 280,660 mammograms from women in the Breast Cancer Surveillance Consortium. All women did not have a previous diagnosis of breast cancer and did not have any imaging in the previous nine months preceding the mammogram. Cancer registry and pathology data were linked to the mammography data.
 
 
-The dataset is intended to be used for risk estimation. We will use different methods to predict risk based on the variables that we may have. We will see how accurate our model is with just demographics, then a model with basic patient history(which a patient themselves would know and be able to answer in a questionnaire, the application of this maybe a web application where you input your information and get your risk), and then finally all variables including ones that a medical professional may only be able to interpret or generate(this could be in the form of a application that a medical professional would be able to input measured variables based on a visit and calculate a paticular patient's risk). 
+The dataset is intended to be used for risk estimation. We will use different methods to predict the risk of developing malignant cells based on the variables that we may have. We will see how accurate our model is with just demographics, then a model with basic patient history(which a patient themselves would know and be able to answer in a questionnaire, the application of this maybe a web application where you input your information and get your risk), and then finally all variables including ones that a medical professional may only be able to generate(this could be in the form of an application that a medical professional would be able to input measured variables based on a visit and calculate a paticular patient's risk). 
 
 
 Data collection and sharing was supported by the National Cancer Institute-funded Breast Cancer Surveillance Consortium (HHSN261201100031C). You can learn more about the BCSC at: http://www.bcsc-research.org/.
@@ -116,8 +116,9 @@ p4 <- ggplot(dt, aes(x=bmi)) +
 
 multiplot(p1,p2,p3,p4,cols=2)
 ```
-When we look at some of the demographics for the data, we see that we have a right skew for age groups, with demographic data that is/is not representative of the population.  
+When we look at some of the demographics for the data, we see that we have a right skew for age groups, with demographic data that is/is not representative of the national level US population.  
 
+# Checking for correlations
 ```{r echo=FALSE}
 dt$agegrp<-as.integer(dt$agegrp)
 dt$bmi<-as.integer(dt$bmi)
@@ -127,7 +128,7 @@ corrplot(cor(dt[1:14]))
 ```
 There doesn't seem to be many strong correlations other than "invasive" and "cancer".
 
-# K-Means
+# PCA Analysis
 
 ```{r echo=FALSE, warning=FALSE}
 set.seed(1234)
@@ -148,7 +149,9 @@ dt.pc$rotation
 plot(dt.pc, type='l')
 ```
 
+The PCA analysis did not determine clear components to focus on for future use in models. It takes roughly 7 components to get above 1 in Variance and there is no clear "elbow" for which to draw the line. 
 
+# K - Means Cluster Analysis
 
 ```{r}
 KmeansClustering <- kmeans(dt.sc, centers = 7)
@@ -162,6 +165,12 @@ biplot(dt.pc)
 abline(h = 0, v = 0, col = "gray60")
 ```
 
+
+#### What are the insights of this cluster analysis and PCA analysis? Does it give us any helpful information for our objective? Are different groups perhaps more likely than others to develop breast cancer?
+#### Why was 7 used for the cluster analysis?
+
+
+
 ```{r}
 
 dt$cancer<-as.factor(dt$cancer)
@@ -170,6 +179,10 @@ plot(dt.pc$x,pch=20,col=colors[dt$cancer])
 
 ```
 
+
+### What does this graph show?
+
+# XGBoost Model
 ```{r}
 library(xgboost)
 #Import
@@ -260,7 +273,6 @@ Test$xgb.pred.med<- predict(xgb.cancer.med, data.matrix(Test[med.col]))
 ```
 
 
-
 ```{r}
 library(pROC)
 auc.demo = roc(Test$cancer,Test$xgb.pred.demo)
@@ -282,9 +294,67 @@ auc(auc.med)
 
 ```
 
+The XGBoost model using all the variables gives us an AUC of 93%. 
 
+# Other Models
 
-# Introduction
+We wanted to see if a logistic regression model or CART model would outperform the XGBoost model
+
+```{r}
+#Logistic Regression
+View(Train)
+BCLog = glm(cancer ~ ., data = Train, family=binomial)
+summary(BCLog)
+  
+#Prediction
+PredictTest = predict(BCLog, newdata = Test, type = "response")
+
+#Confusion Matrix
+cm = table(Test$cancer, round(PredictTest))
+row.names(cm) = c("No", "Yes")
+colnames(cm) = c("Predicted: No", "Predictoin: Yes")
+cm
+
+Accuracy = (77024 + 1997)/(77024 + 1997 + 643)
+Accuracy
+
+#Baseline Accuracy
+1-sum(Test$cancer)/nrow(Test)
+
+#AUC
+TestPred <- data.frame(Probability = predict(BCLog, Test, type = c("response")),
+                       Prediction = round(predict(BCLog, Test, type = c("response")), digits = 0),
+                       ActualDiagnosis = Test$cancer)
+
+auc.BC1 = roc(TestPred$ActualDiagnosis, TestPred$Prediction)
+auc(auc.BC1)
+
+#NOTE: AUC is 88% which is really good!
+
+```
+
+In this logistic Regression model, all the variables are significant except invasive.Also, the accuracy of this model is 99% and there are no false positives.This model improves from the baseline by about 6%.The area underneath the curve however is 88%, which is still less than the XGBoost model.
+
+Now, let's take a look at the CART model to see if there is any improvement. 
+
+# CART Model
+```{r}
+# CART
+BCTree = rpart(cancer ~ ., method="class", data=Train, minbucket=5)
+prp(BCTree)
+
+# Evaluating the Model
+BCPredict = predict(BCTree, newdata=Test, type="class") # automatically assumes threshold = 0.5 and directly predicts 0 or 1
+table(Test$cancer, BCPredict)
+
+#Accuracy 
+(77379 + 4241)/(77379 + 4241 + 1167+1411)
+
+```
+
+This CART model has less accuracy and 1167 false positives. Therefore, the best model for this data set is the XGBoost model. 
+
+# SECOND DATA SET: Introduction
 
 Breast Cancer Wisconsin(Diagnostic) Data Set
 
