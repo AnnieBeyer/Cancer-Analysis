@@ -354,6 +354,74 @@ table(Test$cancer, BCPredict)
 
 This CART model has less accuracy and 1167 false positives. Therefore, the best model for this data set is the XGBoost model. 
 
+If someone wants to use this model to determine their risk of developing cancer, they can plug their variables into this function.
+
+# Cancer Calculator
+```{r}
+BreastCancerProbability = function(menopause, agegrp, density, race, Hispanic, bmi,
+                                    agefirst, nrelbc, brstproc, lastmamm, surgmeno, hrt, invasive) {
+  newdata = data.frame(menopaus = menopause,
+                       agegrp = agegrp,
+                       density = density,
+                       race = race,
+                       Hispanic = Hispanic,
+                       bmi = bmi,
+                       agefirst = agefirst,
+                       nrelbc = nrelbc,
+                       brstproc = brstproc,
+                       lastmamm=lastmamm,
+                       surgmeno = surgmeno,
+                       hrt = hrt,
+                       invasive = invasive)
+  
+  newdata2 = data.frame(menopaus = menopause,
+                       agegrp = agegrp,
+                       density = density,
+                       race = race,
+                       Hispanic = Hispanic,
+                       bmi = bmi,
+                       agefirst = agefirst,
+                       nrelbc = nrelbc,
+                       brstproc = brstproc,
+                       lastmamm=lastmamm,
+                       surgmeno = surgmeno,
+                       hrt = hrt,
+                       invasive = invasive,
+                       cancer = "Unknown")
+ 
+  #Apply the model to result in normalized data using the predict funtion
+  
+  newdata2$xgb.pred.med<- predict(xgb.cancer.med, data.matrix(newdata))
+  print("Probability")
+ 
+  return(newdata2$xgb.pred.med)
+}
+
+
+# Checking Function is Accurate
+TestEx = subset(Test, Test$xgb.pred.med > 0.90)
+TestEx[1,]
+
+Menopause = 0
+AgeGroup = 1
+Density = 2
+Race = 1
+Hispanic = 0
+BMI = 1
+AgeFirst = 0
+NRelBC = 0
+BreastProcedure = 0
+LastM = 9
+SurgMeno = 9
+HRT = 9
+Invasive = 1
+
+#Testing the Function
+BreastCancerProbability(Menopause, AgeGroup, Density, Race, Hispanic, BMI, AgeFirst, NRelBC, BreastProcedure, LastM, SurgMeno, HRT, Invasive)
+
+```
+
+
 # SECOND DATA SET: Introduction
 
 Breast Cancer Wisconsin(Diagnostic) Data Set
