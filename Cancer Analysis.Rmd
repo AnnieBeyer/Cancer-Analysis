@@ -1,6 +1,6 @@
 ---
 title: "Cancer Analysis"
-author: "Caleb Aguiar"
+author: "Caleb Aguiar & Annie Beyer"
 date: "2/27/2021"
 output: word_document
 ---
